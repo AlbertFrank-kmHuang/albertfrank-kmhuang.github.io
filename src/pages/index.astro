@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+  />
+  <title>AF's Space</title>
+
+  <style>
+    :root {
+      font-family:
+        Inter,
+        "PingFang SC",
+        "Microsoft YaHei",
+        sans-serif;
+
+      color: #c7dfef;
+      background: #222a37;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+    }
+
+    a {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    .page {
+      min-height: 100vh;
+    }
+
+    .nav {
+      width: min(1100px, calc(100% - 40px));
+      margin: 0 auto;
+      padding: 24px 0;
+
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .brand {
+      font-size: 1.1rem;
+      font-weight: 700;
+    }
+
+    .nav-links {
+      display: flex;
+      gap: 24px;
+      font-size: 0.95rem;
+    }
+
+    .hero {
+      width: min(1100px, calc(100% - 40px));
+      margin: 0 auto;
+      padding: 110px 0 90px;
+    }
+
+    .hero-kicker {
+      margin-bottom: 16px;
+      font-size: 0.95rem;
+      color: #bbc2d0;
+    }
+
+    .hero-title {
+      margin: 0;
+      max-width: 850px;
+
+      font-size: clamp(3rem, 9vw, 7rem);
+      line-height: 0.95;
+      letter-spacing: -0.05em;
+    }
+
+    .hero-description {
+      max-width: 620px;
+      margin-top: 28px;
+
+      font-size: 1.15rem;
+      line-height: 1.8;
+      color: #bbc2d0;
+    }
+
+    .section {
+      width: min(1100px, calc(100% - 40px));
+      margin: 0 auto;
+      padding: 70px 0;
+    }
+
+    .section-title {
+      margin-bottom: 28px;
+      font-size: 1.8rem;
+    }
+
+    .about-text {
+      max-width: 760px;
+      font-size: 1.05rem;
+      line-height: 1.9;
+      color: #9ba2b0;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 20px;
+    }
+
+    .card {
+      min-height: 220px;
+      padding: 28px;
+
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+
+      border: 1px solid #e5e7eb;
+      border-radius: 20px;
+      background:   #344053;
+
+      transition:
+        transform 0.2s ease,
+        box-shadow 0.2s ease;
+    }
+
+    .card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 14px 40px rgba(0, 0, 0, 0.06);
+    }
+
+    .card-title {
+      margin: 0;
+      font-size: 1.4rem;
+    }
+
+    .card-text {
+      color: #bbc2d0;
+      line-height: 1.7;
+    }
+
+    .card-arrow {
+      font-size: 1.4rem;
+    }
+
+    .footer {
+      width: min(1100px, calc(100% - 40px));
+      margin: 0 auto;
+      padding: 60px 0 40px;
+
+      color: #9ca3af;
+      font-size: 0.9rem;
+    }
+
+    @media (max-width: 700px) {
+      .nav-links {
+        gap: 14px;
+        font-size: 0.85rem;
+      }
+
+      .hero {
+        padding-top: 80px;
+      }
+
+      .grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="page">
+    <nav class="nav">
+      <a class="brand" href="/">AF's Space</a>
+
+      <div class="nav-links">
+        <a href="#about">About</a>
+        <a href="#spaces">Spaces</a>
+        <a href="https://github.com/AlbertFrank-kmHuang">
+          GitHub
+        </a>
+      </div>
+    </nav>
+
+    <main>
+      <section class="hero">
+        <div class="hero-kicker">
+          
+        </div>
+
+        <h1 class="hero-title">
+          Albert<br />
+          Frank<br />
+        </h1>
+
+        <p class="hero-description">
+          AF's Here!
+        </p>
+      </section>
+
+      <section class="section" id="about">
+        <h2 class="section-title">About</h2>
+
+        <p class="about-text">
+          I'm AF, an undergraduate student at Peking University.
+        </p>
+      </section>
+
+      <section class="section" id="spaces">
+        <h2 class="section-title">Spaces</h2>
+
+        <div class="grid">
+          <a class="card" href="#">
+            <div>
+              <h3 class="card-title">画廊</h3>
+              <p class="card-text">
+                生活中心
+              </p>
+            </div>
+            <div class="card-arrow">↗</div>
+          </a>
+
+          <a class="card" href="#">
+            <div>
+              <h3 class="card-title">还没想好放啥</h3>
+              <p class="card-text">
+                这儿也没想好
+              </p>
+            </div>
+            <div class="card-arrow">↗</div>
+          </a>
+
+          <a class="card" href="#">
+            <div>
+              <h3 class="card-title">故纸堆</h3>
+              <p class="card-text">
+                杂记
+              </p>
+            </div>
+            <div class="card-arrow">↗</div>
+          </a>
+
+          <a class="card" href="#">
+            <div>
+              <h3 class="card-title">游乐场</h3>
+              <p class="card-text">
+                来玩
+              </p>
+            </div>
+            <div class="card-arrow">↗</div>
+          </a>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      © 2026 AlbertFrank-kmHuang
+    </footer>
+  </div>
+</body>
+</html>
