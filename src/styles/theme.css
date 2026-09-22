@@ -1,0 +1,20 @@
+:root {
+  /* ---------- 整体配色 ---------- */
+  --page-bg: #222a37;
+  --page-fg: #c7dfef;
+
+  /* ---------- Albert Frank ---------- */
+  --brand-size: clamp(4rem, 7.3vw, 7rem);
+
+  /* ---------- 导航块 ---------- */
+  --nav-diameter: min(40vw, 620px);
+
+  --nav-gap: 10px;
+  --nav-radius: 8px;
+
+  --nav-border-width: 1px;
+  --nav-border-color: rgba(199, 223, 239, 0.38);
+
+  /* 没有图片时使用这个颜色 */
+  --nav-tile-fallback: #394656;
+}

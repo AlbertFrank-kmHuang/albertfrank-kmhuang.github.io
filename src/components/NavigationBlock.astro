@@ -1,0 +1,106 @@
+---
+type NavigationItem = {
+  label: string;
+  href: string;
+  image: string | null;
+};
+
+const items: NavigationItem[] = [
+  {
+    label: "Academic",
+    href: "#",
+    image: "src/assets/images/navigation/academic.jpg",
+  },
+  {
+    label: "Words",
+    href: "#",
+    image: "src/assets/images/navigation/words.jpg",
+  },
+  {
+    label: "Life",
+    href: "#",
+    image: "src/assets/images/navigation/life.jpg",
+  },
+  {
+    label: "Playground",
+    href: "#",
+    image: "src/assets/images/navigation/playground.jpg",
+  },
+];
+---
+
+<nav class="navigation-block" aria-label="Main navigation">
+  <div class="navigation-grid">
+    {
+      items.map((item) => (
+        <a
+          class="navigation-tile"
+          href={item.href}
+          aria-label={item.label}
+          style={`--tile-image: ${
+            item.image ? `url("${item.image}")` : "none"
+          };`}
+        >
+          <span class="navigation-media"></span>
+        </a>
+      ))
+    }
+  </div>
+</nav>
+
+<style>
+  .navigation-block {
+    width: var(--nav-diameter);
+    aspect-ratio: 1;
+
+    display: grid;
+    place-items: center;
+  }
+
+  .navigation-grid {
+    width: 70.710678%;
+    aspect-ratio: 1;
+
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    grid-template-rows: repeat(2, 1fr);
+    gap: var(--nav-gap);
+
+    transform: rotate(45deg);
+  }
+
+  .navigation-tile {
+    position: relative;
+    display: block;
+
+    overflow: hidden;
+
+    border:
+      var(--nav-border-width)
+      solid
+      var(--nav-border-color);
+
+    border-radius: var(--nav-radius);
+
+    background: var(--nav-tile-fallback);
+  }
+
+  .navigation-media {
+    position: absolute;
+
+    /*
+     * 图片需要比外部正方形更大。
+     * 因为我们还要把图片反向旋转 45°，
+     * 否则无法覆盖菱形的四个角。
+     */
+    inset: -22%;
+
+    transform: rotate(-45deg);
+
+    background-color: var(--nav-tile-fallback);
+    background-image: var(--tile-image);
+    background-position: center;
+    background-size: cover;
+    background-repeat: no-repeat;
+  }
+</style>
