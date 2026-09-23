@@ -1,0 +1,330 @@
+---
+import LifeLayout from "../../layouts/LifeLayout.astro";
+import LifeMediaCard from "../../components/LifeMediaCard.astro";
+
+/*
+ * 单曲数据。
+ *
+ * 以后真正加入音乐时，只需要在这里新增/删除对象。
+ * image 暂时没有设置，所以 LifeMediaCard 会使用默认占位图。
+ */
+const tracks = [
+  {
+    title: "Track 01",
+    artist: "Artist 01",
+  },
+  {
+    title: "Track 02",
+    artist: "Artist 02",
+  },
+  {
+    title: "Track 03",
+    artist: "Artist 03",
+  },
+  {
+    title: "Track 04",
+    artist: "Artist 04",
+  },
+  {
+    title: "Track 05",
+    artist: "Artist 05",
+  },
+  {
+    title: "Track 06",
+    artist: "Artist 06",
+  },
+];
+
+/*
+ * 音乐人数据。
+ *
+ * 目前音乐人卡片只显示：
+ * - 大图
+ * - 名字
+ *
+ * 不放作品列表。
+ */
+const creators = [
+  {
+    name: "Artist 01",
+  },
+  {
+    name: "Artist 02",
+  },
+  {
+    name: "Artist 03",
+  },
+  {
+    name: "Artist 04",
+  },
+];
+---
+
+<LifeLayout
+  current="music"
+  title="Music"
+>
+  <div class="music-page">
+
+    <!-- ==================== 单曲 ==================== -->
+
+    <section class="music-section">
+      <h1 class="section-title">
+        单曲
+      </h1>
+
+      <div class="track-grid">
+        {
+          tracks.map((track) => (
+            <LifeMediaCard
+              title={track.title}
+              subtitle={track.artist}
+            />
+          ))
+        }
+      </div>
+    </section>
+
+
+    <!-- ==================== 作者 ==================== -->
+
+    <section class="music-section creators-section">
+      <h2 class="section-title">
+        作者
+      </h2>
+
+      <div class="creator-grid">
+        {
+          creators.map((creator, index) => (
+            <div
+              class:list={[
+                "creator-slot",
+                {
+                  offset: index % 2 === 1,
+                },
+              ]}
+            >
+              <LifeMediaCard
+                title={creator.name}
+              />
+            </div>
+          ))
+        }
+      </div>
+    </section>
+
+  </div>
+</LifeLayout>
+
+
+<style>
+  /*
+   * Music 页面整体内容区域。
+   *
+   * 最大宽度继承 LifeLayout 中定义的
+   * --life-content-width。
+   */
+  .music-page {
+    width:
+      min(
+        var(--life-content-width),
+        calc(100% - 56px)
+      );
+
+    margin: 0 auto;
+
+    padding:
+      70px
+      0
+      170px;
+  }
+
+
+  /*
+   * 两个大区域：
+   *
+   * 单曲
+   * 作者
+   */
+  .music-section {
+    margin-bottom: 160px;
+  }
+
+  .music-section:last-child {
+    margin-bottom: 0;
+  }
+
+
+  /*
+   * “单曲”“作者”两个 section 标题。
+   *
+   * 都靠左上。
+   */
+  .section-title {
+    margin:
+      0
+      0
+      40px;
+
+    font-size: 1.55rem;
+    font-weight: 600;
+
+    letter-spacing: -0.02em;
+  }
+
+
+  /* ==================================================
+     单曲
+     ================================================== */
+
+  /*
+   * 单曲暂时采用规整 Grid。
+   *
+   * 桌面端一行 3 张。
+   * 不做错位。
+   */
+  .track-grid {
+    display: grid;
+
+    grid-template-columns:
+      repeat(3, minmax(0, 1fr));
+
+    gap: 28px;
+  }
+
+
+  /* ==================================================
+     作者
+     ================================================== */
+
+  /*
+   * 作者区域比整个页面稍窄，
+   * 让它更像一个独立的视觉展览区域。
+   */
+  .creator-grid {
+    width:
+      min(
+        920px,
+        100%
+      );
+
+    margin: 0 auto;
+
+    display: grid;
+
+    grid-template-columns:
+      repeat(2, minmax(0, 1fr));
+
+    column-gap: 78px;
+    row-gap: 64px;
+  }
+
+
+  /*
+   * 每个 creator-slot 负责决定作者卡的位置。
+   *
+   * 偶数索引：
+   * 左侧正常位置
+   *
+   * 奇数索引：
+   * 右侧向下错开
+   *
+   * 于是形成：
+   *
+   * ┌──────┐
+   * │  A   │
+   * └──────┘
+   *
+   *             ┌──────┐
+   *             │  B   │
+   *             └──────┘
+   *
+   * ┌──────┐
+   * │  C   │
+   * └──────┘
+   *
+   *             ┌──────┐
+   *             │  D   │
+   *             └──────┘
+   */
+  .creator-slot.offset {
+    transform: translateY(110px);
+  }
+
+
+  /* ==================================================
+     中等宽度屏幕
+     ================================================== */
+
+  @media (max-width: 900px) {
+    .track-grid {
+      grid-template-columns:
+        repeat(2, minmax(0, 1fr));
+    }
+
+    .creator-grid {
+      column-gap: 34px;
+    }
+
+    .creator-slot.offset {
+      transform: translateY(70px);
+    }
+  }
+
+
+  /* ==================================================
+     手机
+     ================================================== */
+
+  @media (max-width: 600px) {
+    .music-page {
+      width:
+        calc(100% - 32px);
+
+      padding:
+        45px
+        0
+        110px;
+    }
+
+    .music-section {
+      margin-bottom: 110px;
+    }
+
+    .section-title {
+      margin-bottom: 28px;
+
+      font-size: 1.35rem;
+    }
+
+
+    /*
+     * 手机上单曲改为单列。
+     */
+    .track-grid {
+      grid-template-columns: 1fr;
+
+      gap: 22px;
+    }
+
+
+    /*
+     * 手机上作者也改为单列，
+     * 并取消错位。
+     *
+     * 因为手机宽度太小，
+     * 再左右错落会浪费大量空间。
+     */
+    .creator-grid {
+      width: 100%;
+
+      grid-template-columns: 1fr;
+
+      gap: 24px;
+    }
+
+    .creator-slot.offset {
+      transform: none;
+    }
+  }
+</style>

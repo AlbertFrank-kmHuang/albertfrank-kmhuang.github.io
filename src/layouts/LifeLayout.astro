@@ -1,0 +1,264 @@
+---
+import lifeImage from "../assets/images/navigation/life.jpg";
+
+type LifePage = "music" | "gallery" | "games" | "bits";
+
+interface Props {
+  current: LifePage;
+  title: string;
+}
+
+const { current, title } = Astro.props;
+
+const navigation = [
+  {
+    id: "music",
+    label: "音乐厅",
+    href: "/life/music",
+  },
+  {
+    id: "gallery",
+    label: "画廊",
+    href: "/life/gallery",
+  },
+  {
+    id: "games",
+    label: "游戏厅",
+    href: "/life/games",
+  },
+  {
+    id: "bits",
+    label: "神奇的操作",
+    href: "/life/bits",
+  },
+];
+---
+
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0"
+    />
+
+    <title>{title} · Albert Frank</title>
+  </head>
+
+  <body>
+    <header class="life-header">
+      <div class="life-header-inner">
+        <a class="back" href="/">
+          &lt; 返回
+        </a>
+
+        <div class="life-navigation">
+          <nav class="life-links" aria-label="Life navigation">
+            {
+              navigation.map((item, index) => (
+                <>
+                  {index !== 0 && (
+                    <span class="separator">/</span>
+                  )}
+
+                  <a
+                    href={item.href}
+                    class:list={[
+                      "life-link",
+                      {
+                        active: current === item.id,
+                      },
+                    ]}
+                  >
+                    {item.label}
+                  </a>
+                </>
+              ))
+            }
+          </nav>
+
+          <img
+            class="life-icon"
+            src={lifeImage.src}
+            alt=""
+          />
+        </div>
+      </div>
+    </header>
+
+    <main>
+      <slot />
+    </main>
+  </body>
+</html>
+
+<style is:global>
+  :root {
+    /*
+     * Life 自己的配色系统。
+     * 现在故意与主页相近，
+     * 以后可以完全独立调整。
+     */
+    --life-bg: #222a37;
+    --life-fg: #c7dfef;
+
+    --life-muted: #8e9cab;
+
+    --life-accent: #64d8ff;
+
+    --life-border:
+      rgba(199, 223, 239, 0.22);
+
+    --life-card-bg: #313c4c;
+
+    --life-content-width: 1180px;
+
+    font-family:
+      Inter,
+      "PingFang SC",
+      "Microsoft YaHei",
+      sans-serif;
+
+    background: var(--life-bg);
+    color: var(--life-fg);
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+  html,
+  body {
+    margin: 0;
+    min-height: 100%;
+
+    background: var(--life-bg);
+  }
+
+  body {
+    min-height: 100vh;
+  }
+
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  .life-header {
+    width: 100%;
+
+    padding:
+      26px
+      28px;
+  }
+
+  .life-header-inner {
+    width:
+      min(
+        var(--life-content-width),
+        calc(100% - 20px)
+      );
+
+    margin: 0 auto;
+
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .back {
+    color: var(--life-muted);
+
+    font-size: 0.95rem;
+
+    transition: color 0.18s ease;
+  }
+
+  .back:hover {
+    color: var(--life-fg);
+  }
+
+  .life-navigation {
+    display: flex;
+    align-items: center;
+
+    gap: 24px;
+  }
+
+  .life-links {
+    display: flex;
+    align-items: center;
+
+    gap: 15px;
+
+    color: var(--life-muted);
+  }
+
+  .life-link {
+    font-size: 0.95rem;
+    font-weight: 400;
+
+    transition:
+      color 0.18s ease,
+      font-weight 0.18s ease;
+  }
+
+  .life-link.active {
+    color: var(--life-accent);
+    font-weight: 700;
+  }
+
+  .separator {
+    color:
+      rgba(
+        199,
+        223,
+        239,
+        0.28
+      );
+  }
+
+  .life-icon {
+    width: 46px;
+    height: 46px;
+
+    object-fit: cover;
+
+    border:
+      1px solid
+      var(--life-border);
+
+    border-radius: 10px;
+  }
+
+  @media (max-width: 720px) {
+    .life-header {
+      padding:
+        20px
+        16px;
+    }
+
+    .life-header-inner {
+      align-items: flex-start;
+    }
+
+    .life-navigation {
+      gap: 14px;
+    }
+
+    .life-links {
+      gap: 8px;
+    }
+
+    .life-link {
+      font-size: 0.82rem;
+    }
+
+    .life-icon {
+      width: 38px;
+      height: 38px;
+    }
+  }
+</style>
