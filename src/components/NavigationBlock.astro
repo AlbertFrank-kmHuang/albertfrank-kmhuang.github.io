@@ -1,4 +1,10 @@
 ---
+import academicImage from "../assets/images/navigation/academic.jpg";
+import wordsImage from "../assets/images/navigation/words.jpg";
+import lifeImage from "../assets/images/navigation/life.jpg";
+import playgroundImage from "../assets/images/navigation/playground.jpg";
+
+
 type NavigationItem = {
   label: string;
   href: string;
@@ -9,22 +15,22 @@ const items: NavigationItem[] = [
   {
     label: "Academic",
     href: "#",
-    image: "src/assets/images/navigation/academic.jpg",
+    image: academicImage.src,
   },
   {
     label: "Words",
     href: "#",
-    image: "src/assets/images/navigation/words.jpg",
+    image: wordsImage.src,
   },
   {
     label: "Life",
     href: "#",
-    image: "src/assets/images/navigation/life.jpg",
+    image: lifeImage.src,
   },
   {
     label: "Playground",
     href: "#",
-    image: "src/assets/images/navigation/playground.jpg",
+    image: playgroundImage.src,
   },
 ];
 ---
