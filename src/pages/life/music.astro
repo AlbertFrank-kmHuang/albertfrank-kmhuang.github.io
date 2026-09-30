@@ -2,6 +2,10 @@
 import LifeLayout from "../../layouts/LifeLayout.astro";
 import LifeMediaCard from "../../components/LifeMediaCard.astro";
 
+import SergeiRachmaninoff from "../../assets/images/life/music/musicians/sergei-rachmaninoff.jpeg";
+import MichaelJackson from "../../assets/images/life/music/musicians/michael-jackson.jpeg";
+import FredericChopin from "../../assets/images/life/music/musicians/frederic-chopin.jpeg";
+
 /*
  * 单曲数据。
  *
@@ -36,24 +40,24 @@ const tracks = [
 ];
 
 /*
- * 音乐人数据。
- *
- * 目前音乐人卡片只显示：
- * - 大图
- * - 名字
- *
- * 不放作品列表。
+ * 音乐人数据
  */
-const creators = [
+const musicians = [
   {
-    name: "Artist 01",
+    name: "Frederic Chopin",
+    image: FredericChopin.src,
   },
   {
-    name: "Artist 02",
+    name: "Sergei Rachmaninoff",
+    image: SergeiRachmaninoff.src,
+
   },
   {
-    name: "Artist 03",
-  },
+    name: "Michael Jackson",
+    image: MichaelJackson.src,
+  },   
+  
+
   {
     name: "Artist 04",
   },
@@ -70,7 +74,7 @@ const creators = [
 
     <section class="music-section">
       <h1 class="section-title">
-        单曲
+        
       </h1>
 
       <div class="track-grid">
@@ -90,22 +94,23 @@ const creators = [
 
     <section class="music-section creators-section">
       <h2 class="section-title">
-        作者
+        Musicians
       </h2>
 
-      <div class="creator-grid">
+      <div class="musician-grid">
         {
-          creators.map((creator, index) => (
+          musicians.map((musician, index) => (
             <div
               class:list={[
-                "creator-slot",
+                "musician-slot",
                 {
                   offset: index % 2 === 1,
                 },
               ]}
             >
               <LifeMediaCard
-                title={creator.name}
+                title={musician.name}
+                image={musician.image}
               />
             </div>
           ))
@@ -201,10 +206,13 @@ const creators = [
    * 作者区域比整个页面稍窄，
    * 让它更像一个独立的视觉展览区域。
    */
-  .creator-grid {
+  /* ==================================================
+     Musicians Size!!!!!!!!!!!
+     ================================================== */
+  .musician-grid {
     width:
       min(
-        920px,
+        1250px,
         100%
       );
 
@@ -247,8 +255,11 @@ const creators = [
    *             │  D   │
    *             └──────┘
    */
-  .creator-slot.offset {
-    transform: translateY(110px);
+     /* ==================================================
+     Musicians Offset!!!!!!!!
+     ================================================== */
+  .musician-slot.offset {
+    transform: translateY(420px);
   }
 
 
@@ -262,11 +273,11 @@ const creators = [
         repeat(2, minmax(0, 1fr));
     }
 
-    .creator-grid {
+    .musician-grid {
       column-gap: 34px;
     }
 
-    .creator-slot.offset {
+    .musician-slot.offset {
       transform: translateY(70px);
     }
   }
@@ -315,7 +326,7 @@ const creators = [
      * 因为手机宽度太小，
      * 再左右错落会浪费大量空间。
      */
-    .creator-grid {
+    .musician-grid {
       width: 100%;
 
       grid-template-columns: 1fr;
@@ -323,7 +334,7 @@ const creators = [
       gap: 24px;
     }
 
-    .creator-slot.offset {
+    .musician-slot.offset {
       transform: none;
     }
   }
