@@ -1,0 +1,731 @@
+---
+import PlaygroundLayout from "../../../layouts/PlaygroundLayout.astro";
+---
+
+<PlaygroundLayout
+  title="扫雷"
+  backHref="/playground/game-repository"
+  backLabel="游戏仓库"
+>
+  <section class="game-page">
+    <div class="difficulty" role="group" aria-label="选择难度">
+      <button type="button" data-level="beginner" aria-pressed="true">基础</button>
+      <button type="button" data-level="intermediate" aria-pressed="false">中级</button>
+      <button type="button" data-level="expert" aria-pressed="false">专家</button>
+    </div>
+
+    <div class="game-panel">
+      <div class="game-toolbar">
+        <div class="counter" aria-label="剩余地雷">
+          <span class="counter-label">剩余地雷</span>
+          <strong id="remaining">010</strong>
+        </div>
+
+        <button id="restart" class="restart" type="button" aria-label="重新开始">🙂</button>
+
+        <div class="counter timer" aria-label="用时">
+          <span class="counter-label">用时</span>
+          <strong id="time">0.0</strong>
+        </div>
+      </div>
+
+      <div class="action-row">
+        <div class="action-mode" role="group" aria-label="点击格子的操作">
+          <button id="reveal-mode" type="button" aria-pressed="true">翻开</button>
+          <button id="flag-mode" type="button" aria-pressed="false">插旗</button>
+        </div>
+
+        <input
+          id="seed-input"
+          class="seed-input"
+          type="text"
+          inputmode="numeric"
+          autocomplete="off"
+          maxlength="20"
+          placeholder="输入随机数"
+          aria-label="雷盘随机数种子"
+        />
+      </div>
+
+      <div class="progress-row">
+        <progress id="progress" max="100" value="0" aria-label="已翻开的安全格子进度"></progress>
+        <span id="progress-value">0.0%</span>
+      </div>
+
+      <div class="board-scroll">
+        <div id="board" class="board" aria-label="扫雷棋盘"></div>
+      </div>
+    </div>
+
+    <div class="seed-generator">
+      <button id="generate-seed" type="button">生成随机数</button>
+      <input id="generated-seed" type="text" readonly aria-label="生成的随机数" placeholder="尚未生成" />
+      <button id="copy-seed" type="button" disabled>复制</button>
+    </div>
+
+    <p id="status" class="status" role="status" aria-live="polite">第一次翻开格子不会踩雷。</p>
+    <p class="instructions">电脑可右键插旗；旗子数量与数字相同时，点击已翻开的数字可展开周围格子。</p>
+  </section>
+</PlaygroundLayout>
+
+<script>
+  type Level = "beginner" | "intermediate" | "expert";
+  type ActionMode = "reveal" | "flag";
+  type GameState = "ready" | "running" | "won" | "lost";
+  type Cell = {
+    mine: boolean;
+    adjacent: number;
+    revealed: boolean;
+    flagged: boolean;
+  };
+
+  const presets: Record<Level, { columns: number; rows: number; mines: number }> = {
+    beginner: { columns: 9, rows: 9, mines: 10 },
+    intermediate: { columns: 16, rows: 16, mines: 40 },
+    expert: { columns: 30, rows: 16, mines: 99 },
+  };
+
+  const board = document.querySelector<HTMLDivElement>("#board");
+  const remaining = document.querySelector<HTMLElement>("#remaining");
+  const time = document.querySelector<HTMLElement>("#time");
+  const status = document.querySelector<HTMLElement>("#status");
+  const restart = document.querySelector<HTMLButtonElement>("#restart");
+  const revealMode = document.querySelector<HTMLButtonElement>("#reveal-mode");
+  const flagMode = document.querySelector<HTMLButtonElement>("#flag-mode");
+  const seedInput = document.querySelector<HTMLInputElement>("#seed-input");
+  const progress = document.querySelector<HTMLProgressElement>("#progress");
+  const progressValue = document.querySelector<HTMLElement>("#progress-value");
+  const generateSeed = document.querySelector<HTMLButtonElement>("#generate-seed");
+  const generatedSeed = document.querySelector<HTMLInputElement>("#generated-seed");
+  const copySeed = document.querySelector<HTMLButtonElement>("#copy-seed");
+  const levelButtons = document.querySelectorAll<HTMLButtonElement>("[data-level]");
+
+  if (board && remaining && time && status && restart && revealMode && flagMode && seedInput && progress && progressValue && generateSeed && generatedSeed && copySeed) {
+    let level: Level = "beginner";
+    let mode: ActionMode = "reveal";
+    let state: GameState = "ready";
+    let cells: Cell[] = [];
+    let cellButtons: HTMLButtonElement[] = [];
+    let flagCount = 0;
+    let revealedCount = 0;
+    let explodedIndex = -1;
+    let startedAt = 0;
+    let timer: number | undefined;
+    let random: () => number = Math.random;
+
+    function hashSeed(value: string) {
+      let hash = 2166136261;
+      for (const character of value) {
+        hash = Math.imul(hash ^ character.charCodeAt(0), 16777619);
+      }
+      return hash >>> 0;
+    }
+
+    function seededRandom(seed: number) {
+      let value = seed;
+      return () => {
+        value += 0x6d2b79f5;
+        let result = value;
+        result = Math.imul(result ^ (result >>> 15), result | 1);
+        result ^= result + Math.imul(result ^ (result >>> 7), result | 61);
+        return ((result ^ (result >>> 14)) >>> 0) / 4294967296;
+      };
+    }
+
+    const neighbors = (index: number): number[] => {
+      const { columns, rows } = presets[level];
+      const row = Math.floor(index / columns);
+      const column = index % columns;
+      const result: number[] = [];
+
+      for (let rowOffset = -1; rowOffset <= 1; rowOffset++) {
+        for (let columnOffset = -1; columnOffset <= 1; columnOffset++) {
+          if (rowOffset === 0 && columnOffset === 0) continue;
+          const nextRow = row + rowOffset;
+          const nextColumn = column + columnOffset;
+          if (nextRow >= 0 && nextRow < rows && nextColumn >= 0 && nextColumn < columns) {
+            result.push(nextRow * columns + nextColumn);
+          }
+        }
+      }
+
+      return result;
+    };
+
+    const counterText = (value: number) => value < 0
+      ? `-${String(Math.abs(value)).padStart(2, "0")}`
+      : String(value).padStart(3, "0");
+
+    function setMode(nextMode: ActionMode) {
+      mode = nextMode;
+      revealMode!.setAttribute("aria-pressed", String(mode === "reveal"));
+      flagMode!.setAttribute("aria-pressed", String(mode === "flag"));
+    }
+
+    function updateCounter() {
+      remaining!.textContent = counterText(presets[level].mines - flagCount);
+    }
+
+    function updateProgress() {
+      const safeCells = cells.length - presets[level].mines;
+      const percentage = safeCells === 0 ? 0 : (revealedCount / safeCells) * 100;
+      progress!.value = percentage;
+      progressValue!.textContent = `${percentage.toFixed(1)}%`;
+    }
+
+    function updateTime() {
+      time!.textContent = ((Date.now() - startedAt) / 1000).toFixed(1);
+    }
+
+    function stopTimer() {
+      if (timer !== undefined) {
+        window.clearInterval(timer);
+        timer = undefined;
+      }
+    }
+
+    function placeMines(firstIndex: number) {
+      const safeArea = new Set([firstIndex, ...neighbors(firstIndex)]);
+      const candidates = cells.map((_, index) => index).filter((index) => !safeArea.has(index));
+
+      for (let index = candidates.length - 1; index > 0; index--) {
+        const randomIndex = Math.floor(random() * (index + 1));
+        [candidates[index], candidates[randomIndex]] = [candidates[randomIndex], candidates[index]];
+      }
+
+      for (const index of candidates.slice(0, presets[level].mines)) {
+        cells[index].mine = true;
+      }
+
+      cells.forEach((cell, index) => {
+        if (!cell.mine) {
+          cell.adjacent = neighbors(index).filter((neighbor) => cells[neighbor].mine).length;
+        }
+      });
+    }
+
+    function renderCell(index: number) {
+      const cell = cells[index];
+      const button = cellButtons[index];
+      const { columns } = presets[level];
+      const position = `第 ${Math.floor(index / columns) + 1} 行第 ${index % columns + 1} 列`;
+      const showMine = state === "lost" && cell.mine && !cell.flagged;
+      const wrongFlag = state === "lost" && cell.flagged && !cell.mine;
+
+      button.className = "cell";
+      button.textContent = "";
+
+      if (wrongFlag) {
+        button.classList.add("wrong-flag");
+        button.textContent = "✕";
+        button.setAttribute("aria-label", `${position}，插错的旗子`);
+      } else if (cell.flagged) {
+        button.classList.add("flagged");
+        button.textContent = "⚑";
+        button.setAttribute("aria-label", `${position}，已插旗`);
+      } else if (showMine || (cell.revealed && cell.mine)) {
+        button.classList.add("mine");
+        if (index === explodedIndex) button.classList.add("exploded");
+        button.textContent = "✹";
+        button.setAttribute("aria-label", `${position}，地雷`);
+      } else if (cell.revealed) {
+        button.classList.add("revealed");
+        if (cell.adjacent > 0) {
+          button.classList.add(`number-${cell.adjacent}`);
+          button.textContent = String(cell.adjacent);
+        }
+        button.setAttribute("aria-label", `${position}，${cell.adjacent === 0 ? "空白" : `周围 ${cell.adjacent} 个雷`}`);
+      } else {
+        button.setAttribute("aria-label", `${position}，未翻开`);
+      }
+    }
+
+    function finish(result: "won" | "lost") {
+      state = result;
+      updateTime();
+      stopTimer();
+
+      if (result === "won") {
+        cells.forEach((cell) => {
+          if (cell.mine) cell.flagged = true;
+        });
+        flagCount = presets[level].mines;
+        updateCounter();
+        restart!.textContent = "😎";
+        status!.textContent = `完成！用时 ${time!.textContent} 秒。`;
+      } else {
+        restart!.textContent = "😵";
+        status!.textContent = "踩到地雷了，点击表情重新开始。";
+      }
+
+      cells.forEach((_, index) => renderCell(index));
+    }
+
+    function openSafeCells(startIndex: number) {
+      const queue = [startIndex];
+
+      while (queue.length > 0) {
+        const index = queue.pop()!;
+        const cell = cells[index];
+        if (cell.revealed || cell.flagged || cell.mine) continue;
+
+        cell.revealed = true;
+        revealedCount++;
+        renderCell(index);
+
+        if (cell.adjacent === 0) {
+          queue.push(...neighbors(index));
+        }
+      }
+
+      updateProgress();
+    }
+
+    function checkWin() {
+      if (revealedCount === cells.length - presets[level].mines) {
+        finish("won");
+      }
+    }
+
+    function reveal(index: number) {
+      if (state === "won" || state === "lost") return;
+      const cell = cells[index];
+      if (cell.revealed || cell.flagged) return;
+
+      if (state === "ready") {
+        placeMines(index);
+        state = "running";
+        startedAt = Date.now();
+        timer = window.setInterval(updateTime, 100);
+        status!.textContent = "找出所有安全格子。";
+      }
+
+      if (cell.mine) {
+        cell.revealed = true;
+        explodedIndex = index;
+        finish("lost");
+        return;
+      }
+
+      openSafeCells(index);
+      checkWin();
+    }
+
+    function toggleFlag(index: number) {
+      if (state === "won" || state === "lost") return;
+      const cell = cells[index];
+      if (cell.revealed) return;
+
+      cell.flagged = !cell.flagged;
+      flagCount += cell.flagged ? 1 : -1;
+      updateCounter();
+      renderCell(index);
+    }
+
+    function chord(index: number) {
+      if (state !== "running") return;
+      const cell = cells[index];
+      if (!cell.revealed || cell.adjacent === 0) return;
+
+      const nearby = neighbors(index);
+      if (nearby.filter((neighbor) => cells[neighbor].flagged).length !== cell.adjacent) return;
+
+      for (const neighbor of nearby) {
+        if (cells[neighbor].flagged || cells[neighbor].revealed) continue;
+        if (cells[neighbor].mine) {
+          cells[neighbor].revealed = true;
+          explodedIndex = neighbor;
+          finish("lost");
+          return;
+        }
+        openSafeCells(neighbor);
+      }
+
+      checkWin();
+    }
+
+    function startGame(nextLevel: Level = level) {
+      const seed = seedInput!.value.trim();
+      if (seed && !/^\d+$/.test(seed)) {
+        status!.textContent = "随机数只能包含数字。";
+        seedInput!.focus();
+        return;
+      }
+
+      stopTimer();
+      level = nextLevel;
+      random = seed ? seededRandom(hashSeed(`${level}:${seed}`)) : Math.random;
+      state = "ready";
+      cells = Array.from({ length: presets[level].columns * presets[level].rows }, () => ({
+        mine: false,
+        adjacent: 0,
+        revealed: false,
+        flagged: false,
+      }));
+      cellButtons = [];
+      flagCount = 0;
+      revealedCount = 0;
+      explodedIndex = -1;
+      startedAt = 0;
+
+      setMode("reveal");
+      updateCounter();
+      updateProgress();
+      time!.textContent = "0.0";
+      restart!.textContent = "🙂";
+      status!.textContent = "第一次翻开格子不会踩雷。";
+      levelButtons.forEach((button) => {
+        button.setAttribute("aria-pressed", String(button.dataset.level === level));
+      });
+
+      board!.style.gridTemplateColumns = `repeat(${presets[level].columns}, var(--cell-size))`;
+      board!.replaceChildren();
+
+      cells.forEach((_, index) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "cell";
+        button.addEventListener("click", () => {
+          if (cells[index].revealed) chord(index);
+          else if (mode === "flag") toggleFlag(index);
+          else reveal(index);
+        });
+        button.addEventListener("contextmenu", (event) => {
+          event.preventDefault();
+          if (cells[index].revealed) chord(index);
+          else toggleFlag(index);
+        });
+        cellButtons.push(button);
+        board!.append(button);
+        renderCell(index);
+      });
+
+      if (seed) {
+        reveal(Math.floor(random() * cells.length));
+      }
+    }
+
+    restart.addEventListener("click", () => startGame());
+    revealMode.addEventListener("click", () => setMode("reveal"));
+    flagMode.addEventListener("click", () => setMode("flag"));
+    levelButtons.forEach((button) => {
+      button.addEventListener("click", () => startGame(button.dataset.level as Level));
+    });
+
+    generateSeed.addEventListener("click", () => {
+      const value = crypto.getRandomValues(new Uint32Array(1))[0];
+      const seed = String(value).padStart(10, "0");
+      seedInput.value = seed;
+      generatedSeed.value = seed;
+      copySeed.disabled = false;
+      copySeed.textContent = "复制";
+      status!.textContent = "随机数已填入，点笑脸开始同一盘。";
+    });
+
+    copySeed.addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(generatedSeed.value);
+        copySeed.textContent = "已复制";
+      } catch {
+        generatedSeed.select();
+        status!.textContent = "复制失败，请手动复制随机数。";
+      }
+    });
+
+    startGame();
+  }
+</script>
+
+<style>
+  .game-page {
+    width: min(var(--playground-content-width), calc(100% - 56px));
+    margin: 0 auto;
+    padding: 45px 0 120px;
+  }
+
+  .difficulty {
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin: 0 0 20px;
+  }
+
+  .difficulty button,
+  .action-mode button,
+  .seed-generator button {
+    padding: 9px 17px;
+    border: 1px solid var(--playground-border);
+    border-radius: 8px;
+    background: var(--playground-card-bg);
+    color: var(--playground-muted);
+    font: inherit;
+    cursor: pointer;
+  }
+
+  .difficulty button[aria-pressed="true"],
+  .action-mode button[aria-pressed="true"] {
+    border-color: var(--playground-accent);
+    color: var(--playground-accent);
+  }
+
+  button:focus-visible,
+  input:focus-visible {
+    outline: 2px solid var(--playground-accent);
+    outline-offset: 2px;
+  }
+
+  .game-panel {
+    width: fit-content;
+    max-width: 100%;
+    margin: 0 auto;
+    padding: 14px;
+    border: 1px solid var(--playground-border);
+    border-radius: 14px;
+    background: #2b3544;
+  }
+
+  .game-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+  }
+
+  .counter {
+    display: flex;
+    flex-direction: column;
+    min-width: 86px;
+  }
+
+  .timer {
+    align-items: flex-end;
+  }
+
+  .counter-label {
+    margin-bottom: 4px;
+    color: var(--playground-muted);
+    font-size: 0.76rem;
+  }
+
+  .counter strong {
+    color: var(--playground-accent);
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 1.45rem;
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+  }
+
+  .restart {
+    width: 46px;
+    height: 46px;
+    padding: 0;
+    border: 1px solid var(--playground-border);
+    border-radius: 9px;
+    background: #394656;
+    font-size: 1.5rem;
+    cursor: pointer;
+  }
+
+  .restart:hover {
+    border-color: var(--playground-accent);
+  }
+
+  .action-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin: 15px 0 10px;
+  }
+
+  .action-mode {
+    display: flex;
+    gap: 8px;
+  }
+
+  .action-mode button {
+    padding: 7px 13px;
+    font-size: 0.85rem;
+  }
+
+  .seed-input,
+  .seed-generator input {
+    min-width: 0;
+    padding: 7px 10px;
+    border: 1px solid var(--playground-border);
+    border-radius: 8px;
+    background: #202936;
+    color: var(--playground-fg);
+    font: 0.85rem ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+
+  .seed-input {
+    width: min(170px, 45%);
+    text-align: right;
+  }
+
+  .seed-input::placeholder,
+  .seed-generator input::placeholder {
+    color: var(--playground-muted);
+  }
+
+  .progress-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+
+  .progress-row progress {
+    flex: 1;
+    height: 6px;
+    overflow: hidden;
+    border: 0;
+    border-radius: 999px;
+    background: #202936;
+    appearance: none;
+  }
+
+  .progress-row progress::-webkit-progress-bar {
+    border-radius: 999px;
+    background: #202936;
+  }
+
+  .progress-row progress::-webkit-progress-value {
+    border-radius: 999px;
+    background: var(--playground-accent);
+  }
+
+  .progress-row progress::-moz-progress-bar {
+    border-radius: 999px;
+    background: var(--playground-accent);
+  }
+
+  .progress-row span {
+    min-width: 49px;
+    color: var(--playground-muted);
+    font: 0.82rem ui-monospace, SFMono-Regular, Menlo, monospace;
+    text-align: right;
+  }
+
+  .board-scroll {
+    max-width: 100%;
+    overflow-x: auto;
+    padding-bottom: 2px;
+  }
+
+  .board {
+    --cell-size: 34px;
+    display: grid;
+    width: max-content;
+    margin: 0 auto;
+    gap: 2px;
+    padding: 4px;
+    border: 1px solid var(--playground-border);
+    border-radius: 6px;
+    background: #202936;
+  }
+
+  .board :global(.cell) {
+    display: grid;
+    place-items: center;
+    width: var(--cell-size);
+    height: var(--cell-size);
+    padding: 0;
+    border: 1px solid #607084;
+    border-radius: 4px;
+    background: linear-gradient(145deg, #526176, #39495b);
+    color: var(--playground-fg);
+    font: 700 1.1rem ui-monospace, SFMono-Regular, Menlo, monospace;
+    cursor: pointer;
+    touch-action: manipulation;
+  }
+
+  .board :global(.cell:hover),
+  .board :global(.cell:focus-visible) {
+    border-color: var(--playground-accent);
+  }
+
+  .board :global(.cell.revealed) {
+    border-color: #465568;
+    background: #293545;
+    cursor: default;
+  }
+
+  .board :global(.cell.flagged) {
+    color: #ffcc73;
+  }
+
+  .board :global(.cell.mine),
+  .board :global(.cell.wrong-flag) {
+    border-color: #ab6b6b;
+    background: #4d3440;
+    color: #ffb4aa;
+  }
+
+  .board :global(.cell.exploded) {
+    background: #944951;
+    color: white;
+  }
+
+  .board :global(.cell.number-1) { color: #83bdff; }
+  .board :global(.cell.number-2) { color: #8ed7ad; }
+  .board :global(.cell.number-3) { color: #ffad9f; }
+  .board :global(.cell.number-4) { color: #d3b4ff; }
+  .board :global(.cell.number-5) { color: #ffd195; }
+  .board :global(.cell.number-6) { color: #9ae1e7; }
+  .board :global(.cell.number-7) { color: #f3c4db; }
+  .board :global(.cell.number-8) { color: #d1dbe5; }
+
+  .seed-generator {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 18px auto 0;
+  }
+
+  .seed-generator button {
+    padding: 7px 12px;
+    font-size: 0.85rem;
+  }
+
+  .seed-generator button:disabled {
+    cursor: default;
+    opacity: 0.5;
+  }
+
+  .seed-generator input {
+    width: 130px;
+    text-align: center;
+  }
+
+  .status {
+    min-height: 1.5em;
+    margin: 20px auto 0;
+    color: var(--playground-fg);
+    text-align: center;
+  }
+
+  .instructions {
+    max-width: 720px;
+    margin: 8px auto 0;
+    color: var(--playground-muted);
+    font-size: 0.9rem;
+    line-height: 1.6;
+    text-align: center;
+  }
+
+  @media (max-width: 600px) {
+    .game-page {
+      width: calc(100% - 32px);
+      padding: 30px 0 90px;
+    }
+
+    .game-panel {
+      width: 100%;
+    }
+  }
+</style>

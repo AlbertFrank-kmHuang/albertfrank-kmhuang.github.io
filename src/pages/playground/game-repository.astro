@@ -1,0 +1,63 @@
+---
+import PlaygroundLayout from "../../layouts/PlaygroundLayout.astro";
+import PlaygroundGameCard from "../../components/PlaygroundGameCard.astro";
+import { playgroundGames } from "../../data/playgroundGames";
+---
+
+<PlaygroundLayout title="游戏仓库">
+  <section class="repository">
+    <h1>游戏仓库</h1>
+
+    <div class="game-grid">
+      {
+        playgroundGames.map((game) => (
+          <PlaygroundGameCard {...game} />
+        ))
+      }
+    </div>
+  </section>
+</PlaygroundLayout>
+
+<style>
+  .repository {
+    width: min(var(--playground-content-width), calc(100% - 56px));
+    margin: 0 auto;
+    padding: 70px 0 170px;
+  }
+
+  h1 {
+    margin: 0 0 40px;
+    font-size: 1.55rem;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+  }
+
+  .game-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 28px;
+  }
+
+  @media (max-width: 900px) {
+    .game-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  @media (max-width: 600px) {
+    .repository {
+      width: calc(100% - 32px);
+      padding: 45px 0 110px;
+    }
+
+    h1 {
+      margin-bottom: 28px;
+      font-size: 1.35rem;
+    }
+
+    .game-grid {
+      grid-template-columns: 1fr;
+      gap: 22px;
+    }
+  }
+</style>
