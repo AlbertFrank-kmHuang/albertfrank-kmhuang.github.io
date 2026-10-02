@@ -1,6 +1,7 @@
 ---
 import LifeLayout from "../../layouts/LifeLayout.astro";
 import LifeMediaCard from "../../components/LifeMediaCard.astro";
+import MusicTrackCard from "../../components/MusicTrackCard.astro";
 
 import SergeiRachmaninoff from "../../assets/images/life/music/musicians/sergei-rachmaninoff.jpeg";
 import MichaelJackson from "../../assets/images/life/music/musicians/michael-jackson.jpeg";
@@ -10,12 +11,16 @@ import FredericChopin from "../../assets/images/life/music/musicians/frederic-ch
  * 单曲数据。
  *
  * 以后真正加入音乐时，只需要在这里新增/删除对象。
- * image 暂时没有设置，所以 LifeMediaCard 会使用默认占位图。
+ * qqSongId 是 QQ 官方外链播放器使用的数字歌曲 ID。
+ * image 可使用平台专辑封面，或换成本地图片路径。
  */
 const tracks = [
   {
-    title: "Track 01",
-    artist: "Artist 01",
+    title: "为要寻一个明星",
+    artist: "台大合唱团",
+    image: "https://y.gtimg.cn/music/photo_new/T002R300x300M000004RMVzo1T37XU.jpg?max_age=2592000",
+    qqSongId: 274951542,
+    qqUrl: "https://y.qq.com/n/ryqq/songDetail/003rBqdj1TN5EY",
   },
   {
     title: "Track 02",
@@ -79,11 +84,16 @@ const musicians = [
 
       <div class="track-grid">
         {
-          tracks.map((track) => (
-            <LifeMediaCard
+          tracks.map((track) => track.qqSongId && track.qqUrl ? (
+            <MusicTrackCard
               title={track.title}
-              subtitle={track.artist}
+              artist={track.artist}
+              image={track.image}
+              qqSongId={track.qqSongId}
+              qqUrl={track.qqUrl}
             />
+          ) : (
+            <LifeMediaCard title={track.title} subtitle={track.artist} />
           ))
         }
       </div>
