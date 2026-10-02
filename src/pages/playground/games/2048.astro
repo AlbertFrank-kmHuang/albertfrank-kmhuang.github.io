@@ -8,23 +8,18 @@ import PlaygroundLayout from "../../../layouts/PlaygroundLayout.astro";
   backLabel="游戏仓库"
 >
   <section class="game-page">
+    <div id="mode-picker" class="mode-picker" role="group" aria-label="游戏模式"></div>
+
     <div class="game-header">
       <h1>2048</h1>
-
       <div class="score-area">
-        <div class="score-box">
-          <span>得分</span>
-          <strong id="score">0</strong>
-        </div>
-        <div class="score-box">
-          <span>最佳</span>
-          <strong id="best">0</strong>
-        </div>
+        <div class="score-box"><span>得分</span><strong id="score">0</strong></div>
+        <div class="score-box"><span>最佳</span><strong id="best">0</strong></div>
       </div>
     </div>
 
     <div class="game-actions">
-      <p>合并相同数字，向 2048 前进。</p>
+      <p id="mode-description">合并相同数字，向 2048 前进。</p>
       <button id="new-game" type="button">新游戏</button>
     </div>
 
@@ -43,31 +38,107 @@ import PlaygroundLayout from "../../../layouts/PlaygroundLayout.astro";
 
 <script>
   type Direction = "left" | "right" | "up" | "down";
+  type Unit = "1" | "i" | "-1" | "-i";
+  type TileValue = number | Unit;
+  type Movement = { from: number; to: number };
+
+  interface ModeDefinition {
+    label: string;
+    description: string;
+    bestKey: string;
+    spawn: () => TileValue;
+    canMerge: (first: TileValue, second: TileValue) => boolean;
+    merge: (first: TileValue, second: TileValue) => { value: TileValue; points: number };
+    tileClass: (value: TileValue) => string;
+    target?: number;
+  }
+
+  const units: Unit[] = ["1", "i", "-1", "-i"];
+  const modes: Record<string, ModeDefinition> = {
+    classic: {
+      label: "经典模式",
+      description: "合并相同数字，向 2048 前进。",
+      bestKey: "af-space-2048-best",
+      spawn: () => Math.random() < 0.9 ? 2 : 4,
+      canMerge: (first, second) => first === second,
+      merge: (first) => {
+        const value = Number(first) * 2;
+        return { value, points: value };
+      },
+      tileClass: (value) => `tile-${Math.min(Number(value), 2048)}`,
+      target: 2048,
+    },
+    complex: {
+      label: "复数模式",
+      description: "随机出现 1、i、-1、-i；合并相同方块，每次合并得 1 分。",
+      bestKey: "af-space-2048-complex-best",
+      spawn: () => units[Math.floor(Math.random() * units.length)],
+      canMerge: (first, second) => first === second,
+      merge: (first, second) => {
+        const exponent = (units.indexOf(first as Unit) + units.indexOf(second as Unit)) % units.length;
+        return { value: units[exponent], points: 1 };
+      },
+      tileClass: (value) => `unit-${units.indexOf(value as Unit)}`,
+    },
+  };
 
   const board = document.querySelector<HTMLDivElement>("#board");
+  const modePicker = document.querySelector<HTMLDivElement>("#mode-picker");
+  const modeDescription = document.querySelector<HTMLParagraphElement>("#mode-description");
   const scoreElement = document.querySelector<HTMLElement>("#score");
   const bestElement = document.querySelector<HTMLElement>("#best");
   const statusElement = document.querySelector<HTMLElement>("#status");
   const newGameButton = document.querySelector<HTMLButtonElement>("#new-game");
   const directionButtons = document.querySelectorAll<HTMLButtonElement>("[data-direction]");
 
-  if (board && scoreElement && bestElement && statusElement && newGameButton) {
+  if (board && modePicker && modeDescription && scoreElement && bestElement && statusElement && newGameButton) {
     const size = 4;
-    const bestKey = "af-space-2048-best";
-    let grid = Array<number>(size * size).fill(0);
-    let tileElements: HTMLDivElement[] = [];
+    const slots = document.createElement("div");
+    const tileLayer = document.createElement("div");
+    const slotElements: HTMLDivElement[] = [];
+    let tileElements = new Map<number, HTMLDivElement>();
+    let grid: Array<TileValue | null> = Array(size * size).fill(null);
+    let mode = "classic";
     let score = 0;
     let best = 0;
     let over = false;
-    let reached2048 = false;
+    let reachedTarget = false;
+    let animating = false;
+    let queuedDirection: Direction | null = null;
+    let gameVersion = 0;
     let pointerStart: { x: number; y: number } | null = null;
 
-    try {
-      best = Number(localStorage.getItem(bestKey)) || 0;
-    } catch {
-      best = 0;
+    slots.className = "slots";
+    tileLayer.className = "tile-layer";
+    tileLayer.setAttribute("aria-hidden", "true");
+    board.append(slots, tileLayer);
+
+    for (let index = 0; index < size * size; index++) {
+      const slot = document.createElement("div");
+      slot.className = "slot";
+      slot.setAttribute("role", "gridcell");
+      slotElements.push(slot);
+      slots.append(slot);
     }
-    bestElement.textContent = String(best);
+
+    for (const [id, definition] of Object.entries(modes)) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "mode-button";
+      button.dataset.mode = id;
+      button.textContent = definition.label;
+      button.addEventListener("click", () => startGame(id));
+      modePicker.append(button);
+    }
+
+    function loadBest() {
+      try {
+        best = Number(localStorage.getItem(modes[mode].bestKey)) || 0;
+      } catch {
+        best = 0;
+      }
+      bestElement!.textContent = String(best);
+    }
 
     function updateScore(points: number) {
       score += points;
@@ -76,122 +147,174 @@ import PlaygroundLayout from "../../../layouts/PlaygroundLayout.astro";
         best = score;
         bestElement!.textContent = String(best);
         try {
-          localStorage.setItem(bestKey, String(best));
+          localStorage.setItem(modes[mode].bestKey, String(best));
         } catch {
           // 无法使用本地存储时，本局内仍会显示最佳分数。
         }
       }
     }
 
-    function spawnTile() {
-      const empty = grid.map((value, index) => value === 0 ? index : -1).filter((index) => index >= 0);
-      if (empty.length === 0) return;
+    function spawnTile(): number | null {
+      const empty = grid.map((value, index) => value === null ? index : -1).filter((index) => index >= 0);
+      if (empty.length === 0) return null;
       const index = empty[Math.floor(Math.random() * empty.length)];
-      grid[index] = Math.random() < 0.9 ? 2 : 4;
+      grid[index] = modes[mode].spawn();
+      return index;
     }
 
-    function renderBoard() {
+    function renderBoard(spawnedIndex: number | null = null, mergedIndices: number[] = []) {
+      tileLayer.replaceChildren();
+      tileElements = new Map();
+      const layerRect = tileLayer.getBoundingClientRect();
+
       grid.forEach((value, index) => {
-        const tile = tileElements[index];
         const row = Math.floor(index / size) + 1;
         const column = index % size + 1;
-        tile.className = value === 0 ? "tile empty" : `tile tile-${Math.min(value, 2048)}`;
-        tile.textContent = value === 0 ? "" : String(value);
-        tile.setAttribute("aria-label", `第 ${row} 行第 ${column} 列，${value === 0 ? "空" : value}`);
+        slotElements[index].setAttribute("aria-label", `第 ${row} 行第 ${column} 列，${value === null ? "空" : value}`);
+        if (value === null) return;
+
+        const slotRect = slotElements[index].getBoundingClientRect();
+        const tile = document.createElement("div");
+        tile.className = `tile ${modes[mode].tileClass(value)}`;
+        if (index === spawnedIndex) tile.classList.add("spawned");
+        if (mergedIndices.includes(index)) tile.classList.add("merged");
+        tile.textContent = String(value);
+        tile.style.left = `${slotRect.left - layerRect.left}px`;
+        tile.style.top = `${slotRect.top - layerRect.top}px`;
+        tile.style.width = `${slotRect.width}px`;
+        tile.style.height = `${slotRect.height}px`;
+        tileLayer.append(tile);
+        tileElements.set(index, tile);
       });
     }
 
     function lineIndices(direction: Direction, line: number): number[] {
-      const indices = Array.from({ length: size }, (_, position) => {
-        if (direction === "left" || direction === "right") return line * size + position;
-        return position * size + line;
-      });
+      const indices = Array.from({ length: size }, (_, position) =>
+        direction === "left" || direction === "right" ? line * size + position : position * size + line
+      );
       return direction === "right" || direction === "down" ? indices.reverse() : indices;
     }
 
-    function mergeLine(values: number[]) {
-      const compact = values.filter((value) => value !== 0);
-      const merged: number[] = [];
+    function calculateMove(direction: Direction) {
+      const next: Array<TileValue | null> = Array(size * size).fill(null);
+      const movements: Movement[] = [];
+      const mergedIndices: number[] = [];
       let points = 0;
 
-      for (let index = 0; index < compact.length; index++) {
-        if (compact[index] === compact[index + 1]) {
-          const value = compact[index] * 2;
-          merged.push(value);
-          points += value;
-          index++;
-        } else {
-          merged.push(compact[index]);
+      for (let line = 0; line < size; line++) {
+        const indices = lineIndices(direction, line);
+        const occupied = indices
+          .filter((index) => grid[index] !== null)
+          .map((index) => ({ from: index, value: grid[index] as TileValue }));
+        let destination = 0;
+
+        for (let index = 0; index < occupied.length; index++) {
+          const current = occupied[index];
+          const following = occupied[index + 1];
+          const to = indices[destination++];
+
+          if (following && modes[mode].canMerge(current.value, following.value)) {
+            const result = modes[mode].merge(current.value, following.value);
+            next[to] = result.value;
+            points += result.points;
+            movements.push({ from: current.from, to }, { from: following.from, to });
+            mergedIndices.push(to);
+            index++;
+          } else {
+            next[to] = current.value;
+            movements.push({ from: current.from, to });
+          }
         }
       }
 
-      while (merged.length < size) merged.push(0);
-      return { merged, points };
+      return { next, movements, mergedIndices, points, changed: next.some((value, index) => value !== grid[index]) };
     }
 
     function canMove() {
-      if (grid.includes(0)) return true;
+      if (grid.includes(null)) return true;
       for (let row = 0; row < size; row++) {
         for (let column = 0; column < size; column++) {
           const index = row * size + column;
-          if (column < size - 1 && grid[index] === grid[index + 1]) return true;
-          if (row < size - 1 && grid[index] === grid[index + size]) return true;
+          const value = grid[index] as TileValue;
+          if (column < size - 1 && modes[mode].canMerge(value, grid[index + 1] as TileValue)) return true;
+          if (row < size - 1 && modes[mode].canMerge(value, grid[index + size] as TileValue)) return true;
         }
       }
       return false;
     }
 
-    function move(direction: Direction) {
+    async function move(direction: Direction) {
       if (over) return;
-      const next = [...grid];
-      let changed = false;
-      let points = 0;
-
-      for (let line = 0; line < size; line++) {
-        const indices = lineIndices(direction, line);
-        const { merged, points: linePoints } = mergeLine(indices.map((index) => grid[index]));
-        points += linePoints;
-        indices.forEach((index, position) => {
-          if (grid[index] !== merged[position]) changed = true;
-          next[index] = merged[position];
-        });
+      if (animating) {
+        queuedDirection = direction;
+        return;
       }
 
+      const { next, movements, mergedIndices, points, changed } = calculateMove(direction);
       if (!changed) return;
+      animating = true;
+      const version = gameVersion;
+      const duration = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 170;
+      const animations = movements.map(({ from, to }) => {
+        const tile = tileElements.get(from);
+        if (!tile || from === to) return Promise.resolve();
+        const source = slotElements[from].getBoundingClientRect();
+        const destination = slotElements[to].getBoundingClientRect();
+        const animation = tile.animate(
+          [
+            { transform: "translate(0, 0)" },
+            { transform: `translate(${destination.left - source.left}px, ${destination.top - source.top}px)` },
+          ],
+          { duration, easing: "cubic-bezier(0.2, 0.8, 0.2, 1)", fill: "forwards" }
+        );
+        return animation.finished.catch(() => undefined);
+      });
+
+      await Promise.all(animations);
+      if (version !== gameVersion) return;
       grid = next;
       updateScore(points);
-      spawnTile();
-      renderBoard();
+      const spawnedIndex = spawnTile();
+      renderBoard(spawnedIndex, mergedIndices);
 
-      if (!reached2048 && grid.some((value) => value >= 2048)) {
-        reached2048 = true;
-        statusElement!.textContent = "合成 2048！你可以继续挑战更高数字。";
+      const target = modes[mode].target;
+      if (target && !reachedTarget && grid.some((value) => typeof value === "number" && value >= target)) {
+        reachedTarget = true;
+        statusElement!.textContent = `合成 ${target}！你可以继续挑战更高数字。`;
       }
-
       if (!canMove()) {
         over = true;
         statusElement!.textContent = "没有可移动的方块了。点击“新游戏”再来一局。";
       }
+
+      animating = false;
+      if (queuedDirection) {
+        const nextDirection = queuedDirection;
+        queuedDirection = null;
+        void move(nextDirection);
+      }
     }
 
-    function startGame() {
-      grid = Array<number>(size * size).fill(0);
+    function startGame(nextMode = mode) {
+      if (!modes[nextMode]) return;
+      gameVersion++;
+      mode = nextMode;
+      grid = Array(size * size).fill(null);
       score = 0;
       over = false;
-      reached2048 = false;
+      reachedTarget = false;
+      animating = false;
+      queuedDirection = null;
       scoreElement!.textContent = "0";
       statusElement!.textContent = "方向键、WASD 或滑动棋盘来移动。";
+      modeDescription!.textContent = modes[mode].description;
+      modePicker!.querySelectorAll<HTMLButtonElement>("[data-mode]").forEach((button) => {
+        button.setAttribute("aria-pressed", String(button.dataset.mode === mode));
+      });
+      loadBest();
       spawnTile();
       spawnTile();
       renderBoard();
-    }
-
-    for (let index = 0; index < size * size; index++) {
-      const tile = document.createElement("div");
-      tile.className = "tile empty";
-      tile.setAttribute("role", "gridcell");
-      tileElements.push(tile);
-      board.append(tile);
     }
 
     const keyDirections: Record<string, Direction> = {
@@ -205,7 +328,7 @@ import PlaygroundLayout from "../../../layouts/PlaygroundLayout.astro";
       const direction = keyDirections[event.key] ?? keyDirections[event.key.toLowerCase()];
       if (!direction) return;
       event.preventDefault();
-      move(direction);
+      void move(direction);
     });
 
     board.addEventListener("pointerdown", (event) => {
@@ -220,17 +343,15 @@ import PlaygroundLayout from "../../../layouts/PlaygroundLayout.astro";
       const y = event.clientY - pointerStart.y;
       pointerStart = null;
       if (Math.max(Math.abs(x), Math.abs(y)) < 24) return;
-      move(Math.abs(x) > Math.abs(y) ? (x > 0 ? "right" : "left") : (y > 0 ? "down" : "up"));
+      void move(Math.abs(x) > Math.abs(y) ? (x > 0 ? "right" : "left") : (y > 0 ? "down" : "up"));
     });
 
-    board.addEventListener("pointercancel", () => {
-      pointerStart = null;
-    });
-
+    board.addEventListener("pointercancel", () => { pointerStart = null; });
     directionButtons.forEach((button) => {
-      button.addEventListener("click", () => move(button.dataset.direction as Direction));
+      button.addEventListener("click", () => void move(button.dataset.direction as Direction));
     });
-    newGameButton.addEventListener("click", startGame);
+    newGameButton.addEventListener("click", () => startGame());
+    window.addEventListener("resize", () => { if (!animating) renderBoard(); });
     startGame();
   }
 </script>
@@ -242,60 +363,8 @@ import PlaygroundLayout from "../../../layouts/PlaygroundLayout.astro";
     padding: 45px 0 100px;
   }
 
-  .game-header,
-  .game-actions {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 16px;
-  }
-
-  h1 {
-    margin: 0;
-    color: var(--playground-fg);
-    font-size: clamp(2.8rem, 11vw, 4.4rem);
-    line-height: 1;
-    letter-spacing: -0.07em;
-  }
-
-  .score-area {
-    display: flex;
-    gap: 9px;
-  }
-
-  .score-box {
-    min-width: 82px;
-    padding: 8px 13px;
-    border: 1px solid var(--playground-border);
-    border-radius: 10px;
-    background: var(--playground-card-bg);
-    text-align: center;
-  }
-
-  .score-box span {
-    display: block;
-    color: var(--playground-muted);
-    font-size: 0.78rem;
-  }
-
-  .score-box strong {
-    display: block;
-    margin-top: 3px;
-    font-size: 1.2rem;
-    font-variant-numeric: tabular-nums;
-  }
-
-  .game-actions {
-    margin: 23px 0 16px;
-  }
-
-  .game-actions p {
-    margin: 0;
-    color: var(--playground-muted);
-    font-size: 0.92rem;
-    line-height: 1.4;
-  }
-
+  .mode-picker { display: flex; gap: 9px; margin-bottom: 30px; }
+  .mode-picker :global(.mode-button),
   .game-actions button,
   .direction-controls button {
     flex: none;
@@ -307,35 +376,83 @@ import PlaygroundLayout from "../../../layouts/PlaygroundLayout.astro";
     font: inherit;
     cursor: pointer;
   }
-
-  .game-actions button:hover,
-  .direction-controls button:hover {
+  .mode-picker :global(.mode-button[aria-pressed="true"]) {
     border-color: var(--playground-accent);
+    color: var(--playground-accent);
   }
-
-  button:focus-visible {
+  .mode-picker :global(.mode-button:hover),
+  .game-actions button:hover,
+  .direction-controls button:hover { border-color: var(--playground-accent); }
+  button:focus-visible, .mode-picker :global(.mode-button:focus-visible) {
     outline: 2px solid var(--playground-accent);
     outline-offset: 3px;
   }
 
+  .game-header, .game-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+  }
+  h1 {
+    margin: 0;
+    color: var(--playground-fg);
+    font-size: clamp(2.8rem, 11vw, 4.4rem);
+    line-height: 1;
+    letter-spacing: -0.07em;
+  }
+  .score-area { display: flex; gap: 9px; }
+  .score-box {
+    min-width: 82px;
+    padding: 8px 13px;
+    border: 1px solid var(--playground-border);
+    border-radius: 10px;
+    background: var(--playground-card-bg);
+    text-align: center;
+  }
+  .score-box span { display: block; color: var(--playground-muted); font-size: 0.78rem; }
+  .score-box strong {
+    display: block;
+    margin-top: 3px;
+    font-size: 1.2rem;
+    font-variant-numeric: tabular-nums;
+  }
+  .game-actions { margin: 23px 0 16px; }
+  .game-actions p {
+    margin: 0;
+    color: var(--playground-muted);
+    font-size: 0.92rem;
+    line-height: 1.4;
+  }
+
   .board {
-    display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 10px;
+    position: relative;
     width: 100%;
     aspect-ratio: 1;
-    padding: 10px;
     border: 1px solid var(--playground-border);
     border-radius: 14px;
     background: #394656;
     touch-action: none;
     user-select: none;
   }
-
+  .board :global(.slots), .board :global(.tile-layer) { position: absolute; inset: 10px; }
+  .board :global(.slots) {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-rows: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+  }
+  .board :global(.slot) {
+    min-width: 0;
+    min-height: 0;
+    border-radius: 9px;
+    background: rgba(19, 27, 39, 0.32);
+  }
+  .board :global(.tile-layer) { pointer-events: none; }
   .board :global(.tile) {
+    position: absolute;
     display: grid;
     place-items: center;
-    min-width: 0;
     border: 1px solid rgba(255, 255, 255, 0.18);
     border-radius: 9px;
     box-shadow: inset 0 1px rgba(255, 255, 255, 0.16), 0 2px 6px rgba(12, 18, 25, 0.12);
@@ -345,14 +462,8 @@ import PlaygroundLayout from "../../../layouts/PlaygroundLayout.astro";
     font-variant-numeric: tabular-nums;
     letter-spacing: -0.045em;
     line-height: 1;
+    box-sizing: border-box;
   }
-
-  .board :global(.tile.empty) {
-    border-color: transparent;
-    box-shadow: none;
-    background: rgba(19, 27, 39, 0.32);
-  }
-
   .board :global(.tile-2) { background: #dce8f1; }
   .board :global(.tile-4) { background: #bcd9ec; }
   .board :global(.tile-8) { background: #8ccdda; }
@@ -362,22 +473,19 @@ import PlaygroundLayout from "../../../layouts/PlaygroundLayout.astro";
   .board :global(.tile-128) { background: #ed9787; }
   .board :global(.tile-256) { background: #e58fb3; }
   .board :global(.tile-512) { background: #c49add; }
-  .board :global(.tile-1024) { background: #9aaef0; }
-  .board :global(.tile-2048) { background: #f3d470; }
+  .board :global(.tile-1024) { background: #9aaef0; font-size: clamp(1.3rem, 5vw, 2.2rem); }
+  .board :global(.tile-2048) { background: #f3d470; font-size: clamp(1.3rem, 5vw, 2.2rem); }
+  .board :global(.unit-0) { background: #dce8f1; }
+  .board :global(.unit-1) { background: #8ccdda; }
+  .board :global(.unit-2) { background: #f0b475; }
+  .board :global(.unit-3) { background: #c49add; }
+  .board :global(.spawned) { animation: tile-appear 160ms ease-out; }
+  .board :global(.merged) { animation: tile-pulse 180ms ease-out; }
+  @keyframes tile-appear { from { opacity: 0; scale: 0.65; } to { opacity: 1; scale: 1; } }
+  @keyframes tile-pulse { 50% { scale: 1.12; } }
 
-  .direction-controls {
-    display: flex;
-    justify-content: center;
-    gap: 9px;
-    margin-top: 18px;
-  }
-
-  .direction-controls button {
-    width: 42px;
-    height: 38px;
-    padding: 0;
-  }
-
+  .direction-controls { display: flex; justify-content: center; gap: 9px; margin-top: 18px; }
+  .direction-controls button { width: 42px; height: 38px; padding: 0; }
   .status {
     min-height: 1.5em;
     margin: 18px 0 0;
@@ -385,23 +493,14 @@ import PlaygroundLayout from "../../../layouts/PlaygroundLayout.astro";
     font-size: 0.9rem;
     text-align: center;
   }
-
   @media (max-width: 600px) {
-    .game-page {
-      padding-top: 30px;
-    }
-
-    .board {
-      gap: 7px;
-      padding: 7px;
-    }
-
-    .board :global(.tile) {
-      border-radius: 6px;
-    }
-
-    .game-actions {
-      align-items: flex-start;
-    }
+    .game-page { padding-top: 30px; }
+    .board :global(.slots), .board :global(.tile-layer) { inset: 7px; }
+    .board :global(.slots) { gap: 7px; }
+    .board :global(.slot), .board :global(.tile) { border-radius: 6px; }
+    .game-actions { align-items: flex-start; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .board :global(.spawned), .board :global(.merged) { animation: none; }
   }
 </style>

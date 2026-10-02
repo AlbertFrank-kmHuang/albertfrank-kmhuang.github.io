@@ -344,9 +344,9 @@ import PlaygroundLayout from "../../../layouts/PlaygroundLayout.astro";
       checkWin();
     }
 
-    function startGame(nextLevel: Level = level) {
+    function startGame(nextLevel: Level = level, applySeed = false) {
       const seed = seedInput!.value.trim();
-      if (seed && !/^\d+$/.test(seed)) {
+      if (applySeed && seed && !/^\d+$/.test(seed)) {
         status!.textContent = "随机数只能包含数字。";
         seedInput!.focus();
         return;
@@ -354,7 +354,7 @@ import PlaygroundLayout from "../../../layouts/PlaygroundLayout.astro";
 
       stopTimer();
       level = nextLevel;
-      random = seed ? seededRandom(hashSeed(`${level}:${seed}`)) : Math.random;
+      random = applySeed && seed ? seededRandom(hashSeed(`${level}:${seed}`)) : Math.random;
       state = "ready";
       cells = Array.from({ length: presets[level].columns * presets[level].rows }, () => ({
         mine: false,
@@ -373,7 +373,9 @@ import PlaygroundLayout from "../../../layouts/PlaygroundLayout.astro";
       updateProgress();
       time!.textContent = "0.0";
       restart!.textContent = "🙂";
-      status!.textContent = "第一次翻开格子不会踩雷。";
+      status!.textContent = !applySeed && seed
+        ? "点笑脸以使用输入的随机数。"
+        : "第一次翻开格子不会踩雷。";
       levelButtons.forEach((button) => {
         button.setAttribute("aria-pressed", String(button.dataset.level === level));
       });
@@ -400,12 +402,12 @@ import PlaygroundLayout from "../../../layouts/PlaygroundLayout.astro";
         renderCell(index);
       });
 
-      if (seed) {
+      if (applySeed && seed) {
         reveal(Math.floor(random() * cells.length));
       }
     }
 
-    restart.addEventListener("click", () => startGame());
+    restart.addEventListener("click", () => startGame(level, true));
     revealMode.addEventListener("click", () => setMode("reveal"));
     flagMode.addEventListener("click", () => setMode("flag"));
     levelButtons.forEach((button) => {
